@@ -1,0 +1,81 @@
+Description:
+  Resolver is a library for using Bayesian inference to turn raters'
+  judgments into estimated answers to questions, a process we call
+  "resolution".
+
+  A resolution algorithm requires two parts:  A statistical model that uses
+  some set of parameters to predict rater behavior, and an inference method
+  that makes use of such a model to perform statistical inference.
+
+Data format:
+  The classes in this library use a data structure referred to in docstrings,
+  for simplicity, as a "ResolverData object".  This is a dict mapping from
+  question to (responses, resolution) pairs, where
+  - question is any hashable Python type,
+  - responses is an iterable of (contributor, judgment, metadata) triples, and
+  - resolution is a dict mapping answers to probabilities;
+  - contributors, judgments, and answers may be any hashable Python type;
+  - metadata is a dict (not used at present); and
+  - proabilities are floats.
+  See test_util.py for examples of these structures.
+
+Statistical models provided in this package:
+  model.py
+    Defines a base class StatisticalModel from which other models inherit.
+  confusion_matrices.py
+    A confusion matrix A_ij expresses the probability that a rater, on seeing
+    a question with answer i, responsds with judgment j.  The matrix need not
+    be square; the judgment and answer spaces can be different.  The model
+    infers the judgment and answers spaces from the questions and resolutions
+    it sees, respectively.  Confusion matrices are appropriate for tasks in
+    which the questions share common judgment and answer spaces which have a
+    consistent meaning between questions, for example classification tasks.
+  probability_correct.py
+    Each contributor has a single parameter stating the probability that that
+    contributor gives the correct answer to any one question.  This model is
+    appropriate for large answer spaces where confusion matrices would be
+    underconstrained, or for tasks with no consistent semantics between the
+    possible answers to different questions.
+  gaussian_contributors.py
+    This model assumes that each contributor judgment is drawn from a normal
+    distribution centered around the correct answer plus a
+    contributor-dependent bias, with a contributor-dependent precision.
+    The answer space and judgment space are assumed to be the set of real
+    numbers.  Therefore, resolutions produced by this model have a different
+    format from those produced by the above discrete models.  The keys of the
+    answer map are 'mean' and 'variance', and their values are the mean and
+    variance of the Gaussian function that is the resolution distribution.
+    For example, a resolution of
+      {'mean': 5.76, 'variance': 0.7}
+    represents a distribution centered around 5.76 with a variance of 0.7.
+
+Inference methods provided in this package:
+  alternating_resolution.py
+    Defines AlternatingResolution, an abstract subclass of
+    JudgmentResolution, and the following two child classes.
+    ExpectationMaximization:
+      EM is an iterative algorithm that computes maximum-likelihood estimates
+      of the model parameters and uses these estimates to compute resolutions.
+      It has the advantage of being relatively fast; however, the assumption
+      that the maximum-likelihood estimates are correct can induce in the
+      resolutions a bias in the direction of overconfidence.
+    VariationalBayes:
+      This is an iterative algorithm that is similar to but more accurate
+      than expectation-maximization.  Instead of making point estimates of
+      maximum-likelihood parameter values, it uses expected-log parameter
+      values to approximate the inference integral.  This method is almost as
+      fast as expectation-maximization and almost as accurate as MCMC,
+      combining speed with good probabilistic calibration and making it the
+      best choice of inference method for most applications.
+  substitution_sampling.py
+    Defines SubstitutionSampling, a subclass of JudgmentResolution.
+    This is an MCMC algorithm to calculate the Bayesian inference integral by
+    alternating drawing sampled model parameters conditioned on resolutions
+    with drawing sampled resolutions conditioned on model paramters.  It can
+    be thought of as a stochastic analog to expectation-maximization.
+
+For usage examples, see the integration test source files.
+
+Several modules in this package use NumPy; for more information, see:
+  http://numpy.org
+  http://docs.scipy.org/doc/numpy-1.6.0/user/whatisnumpy.html
