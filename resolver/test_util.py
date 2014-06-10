@@ -198,6 +198,20 @@ DS_DATA = dict(zip(range(1, 46), [(response, {}) for response in DS_RESPONSES]))
 # Data object with the EM-CM-estimated resolutions:
 DS_DATA_FINAL = dict(zip(range(1, 46), zip(DS_RESPONSES, DS_EM_CM_RESOLUTIONS)))
 
+# A modified data set with extra copies of some questions; we use this to test
+# that question-weighting works correctly:
+DS_DATA_EXTRA = DS_DATA_FINAL.copy()
+DS_DATA_EXTRA['Extra question 1'] = DS_DATA_FINAL[DS_DATA_FINAL.keys()[0]]
+DS_DATA_EXTRA['Extra question 2'] = DS_DATA_FINAL[DS_DATA_FINAL.keys()[1]]
+DS_DATA_EXTRA['Extra question 3'] = DS_DATA_FINAL[DS_DATA_FINAL.keys()[2]]
+DS_DATA_EXTRA['Extra question 4'] = DS_DATA_FINAL[DS_DATA_FINAL.keys()[3]]
+# For convneience, set weights such that the results of all tested methods
+# should be the same for the weighted data as for the original data:
+DS_EXTRA_WEIGHTS = {DS_DATA_FINAL.keys()[0]: 0.1, 'Extra question 1': 0.9,
+                    DS_DATA_FINAL.keys()[1]: 0.8, 'Extra question 2': 0.2,
+                    DS_DATA_FINAL.keys()[2]: 0.3, 'Extra question 3': 0.7,
+                    DS_DATA_FINAL.keys()[3]: 0.4, 'Extra question 4': 0.6}
+
 
 #########################
 # Helper test functions #

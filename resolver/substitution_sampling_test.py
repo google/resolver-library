@@ -19,6 +19,7 @@ __author__ = 'tpw@google.com (Tamsyn Waterhouse)'
 import numpy
 
 import unittest
+from resolver import model
 from resolver import substitution_sampling
 from resolver import test_util
 
@@ -27,7 +28,8 @@ MOCK_RESOLUTION = {'A': 0.7, 'B': 0.2}  # and 0.1 probability of something else
 NUMBER_OF_SAMPLES = 10000
 
 
-class MockModel(object):
+class MockModel(model.StatisticalModel):
+
   def __init__(self):
     self.times_called = 0
 
@@ -47,32 +49,35 @@ class SubstitutionSamplingTest(unittest.TestCase):
     # Set up mock data, a mock model object and a SubstitutionSampling object:
     resolution = {}
     data = {1: ([], resolution)}
-    model = MockModel()
+    mock_model = MockModel()
     ss = substitution_sampling.SubstitutionSampling()
 
     # Call DrawOneSample a few times and check that it produces sensible
     # resolutions:
     for _ in range(100):
-      ss.DrawOneSample(data, model)
+      ss.DrawOneSample(data, mock_model)
       self.assertTrue('A' in resolution or 'B' in resolution or not resolution)
 
   def testIntegrate(self):
     # Seed the random number generator to produce deterministic test results:
     numpy.random.seed(0)
 
-    # Set up mock data, a mock model object and a SubstitutionSampling object:
-    resolution = {}
-    data = {1: ([], resolution)}
-    model = MockModel()
+    # Set up mock data, a mock model object, and a SubstitutionSampling object:
+    data = {1: ([], {}),
+            2: ([], {'C': 1.0})}
+    mock_model = MockModel()
     ss = substitution_sampling.SubstitutionSampling()
 
     # Call ss.Integrate and check that the result is close to the mock model's
     # resolution:
-    ss.Integrate(data, model, number_of_samples=NUMBER_OF_SAMPLES)
-    test_util.AssertMapsAlmostEqual(self, MOCK_RESOLUTION, resolution,
-                                    label='answer', places=2)
+    ss.Integrate(data, mock_model, golden_questions=[2],
+                 number_of_samples=NUMBER_OF_SAMPLES)
+    test_util.AssertResolutionsAlmostEqual(self,
+                                           {1: MOCK_RESOLUTION, 2: {'C': 1.0}},
+                                           mock_model.ExtractResolutions(data),
+                                           places=2)
     # ss should have called SetSampleParameters NUMBER_OF_SAMPLES times:
-    self.assertEqual(NUMBER_OF_SAMPLES, model.times_called)
+    self.assertEqual(NUMBER_OF_SAMPLES, mock_model.times_called)
 
 
 if __name__ == '__main__':

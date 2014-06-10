@@ -33,9 +33,6 @@ gaussian_contributors.py.
 
 __author__ = 'tpw@google.com (Tamsyn Waterhouse)'
 
-import itertools
-import numpy
-
 
 # The number of samples to use to compute the resolution inference integral:
 # Assuming 1/sqrt(n) variance, this should give roughly percent-level accuracy.
@@ -51,7 +48,7 @@ class SubstitutionSampling(object):
   """Implements the substitution sampling algorithm for judgments."""
 
   @staticmethod
-  def DrawOneSample(data, model, add_to=None):
+  def DrawOneSample(data, model, golden_questions=None, add_to=None):
     """Performs one step of the substitution sampling algorithm.
 
     Note:  This method updates the resolution maps in data with randomly
@@ -62,6 +59,12 @@ class SubstitutionSampling(object):
       data:    A ResolverData structure.
       model:   A statistical model for the problem.  It must provide
                the methods SetSampleParameters and ResolveQuestion.
+      golden_questions:  An optional iterable of questions whose resolutions
+                         are to be left unchanged by this method.  Useful if
+                         these questions were set with golden resolutions.
+                         Fixing resolutions in this manner is how resolver
+                         takes into account gold questions.
+
       add_to:  A list of length equal to data, with each element a
                resolution map (a Python dict).  If specified, the resolutions
                drawn will be added to this accumulator.  For example, if
@@ -73,31 +76,23 @@ class SubstitutionSampling(object):
                  [{'A': 1.0, 'B': 3.0, 'C': 1.0},
                   {'A': 4.0, 'W': 2.0}].
     """
+    if golden_questions is None:
+      golden_questions = set()
+
     # Have the model draw sample parameters conditioned on the current
     # resolutions in the data object:
     model.SetSampleParameters(data)
 
     # Draw random resolutions based on the sampled parameters:
     for question, (responses, resolution_map) in data.iteritems():
+      if question in golden_questions:
+        continue
       resolution_map.clear()
       # Get the model's estimated resolution distribution for this question:
       probabilistic_resolution_map = model.ResolveQuestion(responses)
-      probability_values_list = probabilistic_resolution_map.values()
-      # Now we terminate the list of probabilities with a "none of the above"
-      # option.  This is because ResolveQuestion is allowed to return a map
-      # that sums to less than 1.0, with the remainder representing "an
-      # anonymous answer in the answer space but not seen in the judgments".
-      # (ProbabilityCorrect is one example of a model that does this.)
-      probability_values_list.append(0.0)
-      # (numpy.random.multinomial will change this value to be 1.0 minus the
-      #  sum of the other elments, so we don't need to do so ourselves.)
-      # Now we draw a random index from the list:
-      answer_index = next(itertools.compress(
-          range(len(probability_values_list)),
-          numpy.random.multinomial(1, probability_values_list)))
-      if answer_index < len(probabilistic_resolution_map):
-        # We drew a known answer; store it in resolution_map:
-        answer = probabilistic_resolution_map.keys()[answer_index]
+      # Draw an answer randomly from the distribution:
+      answer = model.RandomAnswer(probabilistic_resolution_map)
+      if answer:
         resolution_map[answer] = 1.0
         if add_to:
           # Update add_to by adding the resolution to this question:
@@ -107,7 +102,8 @@ class SubstitutionSampling(object):
       #  an anonymous answer.)
 
   @staticmethod
-  def Integrate(data, model, number_of_samples=NUMBER_OF_SAMPLES,
+  def Integrate(data, model, golden_questions=None,
+                number_of_samples=NUMBER_OF_SAMPLES,
                 show_progress_bar=False):
     """Estimates answers by integration using number_of_samples samples.
 
@@ -115,24 +111,38 @@ class SubstitutionSampling(object):
       data:               A ResolverData structure.
       model:              A statistical model for the problem.  It must provide
                           methods SetSampleParameters and ResolveQuestion.
+      golden_questions:  An optional iterable of questions whose resolutions
+                         are to be left unchanged by this method.  Useful if
+                         these questions were set with golden resolutions.
       number_of_samples:  The number of samples to use for the integration.
       show_progress_bar:  Show a progress bar using pybar.
     """
+    if golden_questions is None:
+      golden_questions = frozenset()
+    else:
+      # Sets are faster to work with than lists:
+      golden_questions = frozenset(golden_questions)
+
     assert number_of_samples > 0
 
     # Draw number_of_samples samples of the resolution matrix:
     # Note that these samples come from a Markov chain, which is a sequential
     # process.  The "state" is stored in data as we go, and we accumulate the
     # integral's partial sums in resolution_sum.
-    resolution_sum = dict([(question, {}) for question in data])
+    resolution_sum = dict([(question, {}) for question in data
+                           if question not in golden_questions])
     for _ in range(number_of_samples):
       # Update parameters and draw one sample, clearing the resolution_map list
       # on the first iteration and adding to it on all subsequent iterations:
-      SubstitutionSampling.DrawOneSample(data, model, add_to=resolution_sum)
+      SubstitutionSampling.DrawOneSample(data, model,
+                                         golden_questions=golden_questions,
+                                         add_to=resolution_sum)
 
     # The integral we seek is the mean of the sampled resolutions, so we must
     # divide by number_of_samples:
     for question, (_, resolution_map) in data.iteritems():
+      if question in golden_questions:
+        continue
       resolution_map.clear()
       for key in resolution_sum[question]:
         # Any key in resolution_map should have a positive value:

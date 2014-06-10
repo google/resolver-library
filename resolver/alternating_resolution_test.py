@@ -23,6 +23,7 @@ from resolver import test_util
 
 
 class MockModel(model.StatisticalModel):
+
   def __init__(self):
     self.dummy_parameter = 0.0
 
@@ -49,31 +50,42 @@ class AlternatingResolutionTest(unittest.TestCase):
   longMessage = True
 
   def testIterateOnce(self):
-    data = {1: ([], {})}
+    data = {1: ([], {}),
+            2: ([], {'C': 1.0})}
     mock_model = MockModel()
     resolution = MockResolution()
-    resolution.IterateOnce(data, mock_model)
+    resolution.IterateOnce(data, mock_model, golden_questions=[2])
     # resolution should have called ChangeParameters once and ResolveQuestion
     # once:
     self.assertEqual(1.0, mock_model.dummy_parameter)
+    # The resolution to question 1 should be as set by
+    # MockModel.ResolveQuestion, and the resolution to question 2 should be
+    # left to what we set above because we marked it golden:
     test_util.AssertResolutionsAlmostEqual(
         self,
-        {1: {'A': 1.0, 'B': 0.0}},
+        {1: {'A': 1.0, 'B': 0.0},
+         2: {'C': 1.0}},
         mock_model.ExtractResolutions(data))
 
   def testIterateUntilConvergence(self):
-    data = {1: ([], {})}
+    data = {1: ([], {}),
+            2: ([], {'C': 1.0})}
     mock_model = MockModel()
     resolution = MockResolution()
     # Our silly model should take far more than MAX_ITERATIONS to converge:
-    self.assertFalse(resolution.IterateUntilConvergence(data, mock_model))
+    self.assertFalse(resolution.IterateUntilConvergence(data, mock_model,
+                                                        golden_questions=[2]))
     # resolution should have called IterateOnce exactly MAX_ITERATIONS times:
     expected_parameter = float(alternating_resolution.MAX_ITERATIONS)
     self.assertEqual(expected_parameter, mock_model.dummy_parameter)
+    # The resolution to question 1 should be as returned by
+    # MockModel.ResolveQuestion, and the resolution to question 2 should be
+    # left to what we set above because we marked it golden:
     test_util.AssertResolutionsAlmostEqual(
         self,
         {1: {'A': 1.0 / expected_parameter,
-             'B': 1.0 - 1.0 / expected_parameter}},
+             'B': 1.0 - 1.0 / expected_parameter},
+         2: {'C': 1.0}},
         mock_model.ExtractResolutions(data))
     # Now we'll force convergence by setting mock_model.dummy_parameter very
     # high...

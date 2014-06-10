@@ -89,6 +89,13 @@ class ProbabilityCorrectTest(unittest.TestCase):
                                     DS_MLE_PROBABILITY_CORRECT,
                                     result,
                                     label='contributor')
+    # Now with question-weighting:
+    result = probability_correct.MLEProbabilityCorrect(
+        test_util.DS_DATA_EXTRA, question_weights=test_util.DS_EXTRA_WEIGHTS)
+    test_util.AssertMapsAlmostEqual(self,
+                                    DS_MLE_PROBABILITY_CORRECT,
+                                    result,
+                                    label='contributor')
 
   def testProbabilityCorrectBetaParameters(self):
     # Test for the Dawid & Skene data:
@@ -106,6 +113,15 @@ class ProbabilityCorrectTest(unittest.TestCase):
     test_util.AssertMapsAlmostEqual(self, IPEIROTIS_ALPHA, result_alpha,
                                     label='alpha, contributor')
     test_util.AssertMapsAlmostEqual(self, IPEIROTIS_BETA, result_beta,
+                                    label='beta, contributor')
+    # Test with question-weighting:
+    result_alpha, result_beta = (
+        probability_correct.ProbabilityCorrectBetaParameters(
+            test_util.DS_DATA_EXTRA,
+            question_weights=test_util.DS_EXTRA_WEIGHTS))
+    test_util.AssertMapsAlmostEqual(self, DS_ALPHA, result_alpha,
+                                    label='alpha, contributor')
+    test_util.AssertMapsAlmostEqual(self, DS_BETA, result_beta,
                                     label='beta, contributor')
 
   def testSampleProbabilityCorrect(self):

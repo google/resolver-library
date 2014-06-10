@@ -40,27 +40,34 @@ INFINITY = float('inf')
 ####################
 
 
-def MLEProbabilityCorrect(data):
+def MLEProbabilityCorrect(data, question_weights=None):
   """Given resolutions and judgments, returns MLE contributor parameters.
 
   Args:
     data: a ResolverData object.
+    question_weights: Used by decision_tree.py.  An optional dict from question
+                      to a float.  Questions will be weighted accordingly in
+                      computing the parameters, with a default weight of 1.0.
 
   Returns:
     Maximum-likelihood probabilities-correct keyed by contributor.
   """
+  if question_weights is None:
+    question_weights = {}
+
   # The MLE for a contributor's probability-correct parameter is simply the
   # proportion of that contributor's judgments that are correct; this is
   # equation (TODO(tpw)) in RCJ:
   total_judgments = collections.defaultdict(float)
   correct_judgments = collections.defaultdict(float)
-  for responses, resolution_map in data.itervalues():
+  for question, (responses, resolution_map) in data.iteritems():
+    weight = question_weights.get(question, 1.0)
     for contributor, judgment, _ in responses:
-      total_judgments[contributor] += 1.0
+      total_judgments[contributor] += weight
       if judgment in resolution_map:
         # Add to correct_judgments the probability that this judgment was
         # correct (that is, correct_judgments is really an expectation):
-        correct_judgments[contributor] += resolution_map[judgment]
+        correct_judgments[contributor] += resolution_map[judgment] * weight
   probability_correct = {}
   for contributor in total_judgments:
     assert total_judgments[contributor]
@@ -69,27 +76,34 @@ def MLEProbabilityCorrect(data):
   return probability_correct
 
 
-def ProbabilityCorrectBetaParameters(data):
+def ProbabilityCorrectBetaParameters(data, question_weights=None):
   """Given resolutions and judgments, returns beta parameters for P(pi|data).
 
   Args:
     data: a ResolverData object.
+    question_weights: Used by decision_tree.py.  An optional dict from question
+                      to a float.  Questions will be weighted accordingly in
+                      computing the parameters, with a default weight of 1.0.
 
   Returns:
     A map to alpha and a map to beta parameters, each keyed by contributor,
     that describe the likelihood function for each contributor's
     probability-correct value.
   """
+  if question_weights is None:
+    question_weights = {}
+
   # Compute the pairs of beta parameters that together describe P(pi|data):
   # alpha is 1.0 plus the number of correct judgments from a given contributor:
   alpha = collections.defaultdict(lambda: 1.0)
   # beta is 1.0 plus the number of correct judgments from a given contributor:
   beta = collections.defaultdict(lambda: 1.0)
-  for responses, resolution_map in data.itervalues():
+  for question, (responses, resolution_map) in data.iteritems():
+    weight = question_weights.get(question, 1.0)
     for contributor, judgment, _ in responses:
       probability_correct = resolution_map.get(judgment, 0.0)
-      alpha[contributor] += probability_correct
-      beta[contributor] += 1.0 - probability_correct
+      alpha[contributor] += probability_correct * weight
+      beta[contributor] += (1.0 - probability_correct) * weight
   return alpha, beta
 
 
@@ -163,33 +177,48 @@ class ProbabilityCorrect(model.StatisticalModel):
     self.probability_correct = {}
     self._answer_space_size = 0
 
-  def SetMLEParameters(self, data):
+  def SetMLEParameters(self, data, question_weights=None):
     """Given resolutions and judgments, updates self with MLE parameter values.
 
     Args:
       data: a ResolverData object.
+      question_weights: Used by decision_tree.py.  An optional dict from
+                        question to a float.  Questions will be weighted
+                        accordingly in computing the parameters, with a
+                        default weight of 1.0.
     """
-    self.probability_correct = MLEProbabilityCorrect(data)
+    self.probability_correct = MLEProbabilityCorrect(
+        data, question_weights=question_weights)
     self._UpdatePrivateMembers(data)
 
-  def SetSampleParameters(self, data):
+  def SetSampleParameters(self, data, question_weights=None):
     """Given resolutions and judgments, updates self with sampled parameters.
 
     Args:
       data: a ResolverData object.
+      question_weights: Used by decision_tree.py.  An optional dict from
+                        question to a float.  Questions will be weighted
+                        accordingly in computing the parameters, with a
+                        default weight of 1.0.
     """
     self.probability_correct = SampleProbabilityCorrect(
-        ProbabilityCorrectBetaParameters(data))
+        ProbabilityCorrectBetaParameters(data,
+                                         question_weights=question_weights))
     self._UpdatePrivateMembers(data)
 
-  def SetVariationalParameters(self, data):
+  def SetVariationalParameters(self, data, question_weights=None):
     """Given resolutions and judgments, updates self with variational params.
 
     Args:
       data: a ResolverData object.
+      question_weights: Used by decision_tree.py.  An optional dict from
+                        question to a float.  Questions will be weighted
+                        accordingly in computing the parameters, with a
+                        default weight of 1.0.
     """
     self.probability_correct = VariationalProbabilityCorrect(
-        ProbabilityCorrectBetaParameters(data))
+        ProbabilityCorrectBetaParameters(data,
+                                         question_weights=question_weights))
     self._UpdatePrivateMembers(data)
 
   def SetAnswerSpaceSize(self, answer_space_size):
@@ -216,7 +245,6 @@ class ProbabilityCorrect(model.StatisticalModel):
     if not self._answer_space_size:
       # Calculate the answer space size using the judgments given:
       self.SetAnswerSpaceSize(AnswerSpaceSize(data))
-    assert self._answer_space_size > 1
 
     # Next we'll precompute a helper value probability_factor for each
     # contributor.  Here's why and how:
@@ -269,7 +297,7 @@ class ProbabilityCorrect(model.StatisticalModel):
     self._probability_factor = {}
     for contributor in self.probability_correct:
       correct_factor = self.probability_correct[contributor]
-      if correct_factor < 1.0:
+      if correct_factor < 1.0 and self._answer_space_size > 1:
         s = float(self._answer_space_size)
         incorrect_factor = (1.0 - correct_factor) / (s - 1.0)
         self._probability_factor[contributor] = (correct_factor /

@@ -35,24 +35,30 @@ from resolver import model
 ####################
 
 
-def MLEResolutionPriors(data):
+def MLEResolutionPriors(data, question_weights=None):
   """Given resolutions, returns the MLE of the resolution priors.
 
   Args:
     data: A ResolverData object.
+    question_weights: Used by decision_tree.py.  An optional dict from question
+                      to a float.  Questions will be weighted accordingly in
+                      computing the priors, with a default weight of 1.0.
 
   Returns:
     Maximum-likelihood resolution priors keyed by answer.
   """
+  if question_weights is None:
+    question_weights = {}
 
   # The MLE for the priors is simply the normalized resolution counts;
   # this is equation (2.4) of Dawid and Skene or equation (TODO(tpw)) in
   # RCJ:
   norm = 0.0
   priors = collections.defaultdict(float)
-  for _, resolution_map in data.itervalues():
+  for question, (_, resolution_map) in data.iteritems():
+    weight = question_weights.get(question, 1.0)
     for answer in resolution_map:
-      probability = resolution_map[answer]
+      probability = resolution_map[answer] * weight
       priors[answer] += probability
       norm += probability
   assert norm or not priors  # Either norm is nonzero or priors is empty
@@ -61,16 +67,21 @@ def MLEResolutionPriors(data):
   return priors
 
 
-def MLEConfusionMatrices(data):
+def MLEConfusionMatrices(data, question_weights=None):
   """Given resolutions and judgments, returns the MLE confusion matrices.
 
   Args:
     data: A ResolverData object.
+    question_weights: Used by decision_tree.py.  An optional dict from question
+                      to a float.  Questions will be weighted accordingly in
+                      computing the priors, with a default weight of 1.0.
 
   Returns:
     Maximum-likelihood confusion matrices keyed by contributor, answer,
     and judgment.
   """
+  if question_weights is None:
+    question_weights = {}
 
   # The MLE for a confusion matrix is computed by counting judgments; this is
   # equation (2.3) in Dawid and Skene or equation (TODO(tpw)) in RCJ:
@@ -79,10 +90,11 @@ def MLEConfusionMatrices(data):
   # We'll need to normalize each row of each confusion matrix:
   norm = collections.defaultdict(lambda: collections.defaultdict(float))
   # Start by computing the sums of correct judgments:
-  for responses, resolution_map in data.itervalues():
+  for question, (responses, resolution_map) in data.iteritems():
+    weight = question_weights.get(question, 1.0)
     for contributor, judgment, _ in responses:
       for answer in resolution_map:
-        probability = resolution_map[answer]
+        probability = resolution_map[answer] * weight
         if probability:
           confusion_matrices[contributor][answer][judgment] += probability
           norm[contributor][answer] += probability
@@ -96,22 +108,28 @@ def MLEConfusionMatrices(data):
   return confusion_matrices
 
 
-def ResolutionPriorsDirichletParameters(data):
+def ResolutionPriorsDirichletParameters(data, question_weights=None):
   """Given resolutions, returns the Dirichlet parameters for the answer priors.
 
   Args:
     data: A ResolverData object.
+    question_weights: Used by decision_tree.py.  An optional dict from question
+                      to a float.  Questions will be weighted accordingly in
+                      computing the priors, with a default weight of 1.0.
 
   Returns:
     The Dirichlet parameter vector describing P(priors|resolutions),
     keyed by answer.  (This can be used by the functions below.)
   """
+  if question_weights is None:
+    question_weights = {}
 
   # Compute the Dirichlet parameter vector describing P(priors|resolutions):
   dirichlet = collections.defaultdict(lambda: 1.0)
-  for _, resolution_map in data.itervalues():
+  for question, (_, resolution_map) in data.iteritems():
+    weight = question_weights.get(question, 1.0)
     for answer in resolution_map:
-      dirichlet[answer] += resolution_map[answer]
+      dirichlet[answer] += resolution_map[answer] * weight
   # dirichlet[answer] is now 1.0 plus the sum of all
   # resolution_map[answer] in data.
   return dirichlet
@@ -154,20 +172,25 @@ def SampleResolutionPriors(dirichlet):
 
   # Draw and return a random prior vector using the Dirichlet distribution:
   return dict(zip(dirichlet.iterkeys(),
-                  numpy.random.mtrand.dirichlet(dirichlet.values())))
+                  numpy.random.dirichlet(dirichlet.values())))
 
 
-def ConfusionMatricesDirichletParameters(data):
+def ConfusionMatricesDirichletParameters(data, question_weights=None):
   """Given resolutions and judgments, returns the Dirichlet parameters for CMs.
 
   Args:
     data: A ResolverData object.
+    question_weights: Used by decision_tree.py.  An optional dict from question
+                      to a float.  Questions will be weighted accordingly in
+                      computing the priors, with a default weight of 1.0.
 
   Returns:
     The Dirichlet parameters describing P(confusion_matrices|data), keyed by
     answer, judgment, and contributor.  (This can be used by the functions
     below.)
   """
+  if question_weights is None:
+    question_weights = {}
 
   # First we compute the Dirichlet parameter vectors, one for each
   # contributor-answer pair, that describe P(confusion_matrices|data):
@@ -178,11 +201,13 @@ def ConfusionMatricesDirichletParameters(data):
   contributor_space = set()
   answer_space = set()
   judgment_space = set()
-  for responses, resolution_map in data.itervalues():
+  for question, (responses, resolution_map) in data.iteritems():
+    weight = question_weights.get(question, 1.0)
     for contributor, judgment, _ in responses:
       judgment_space.add(judgment)
       for answer in resolution_map:
-        dirichlet[contributor][answer][judgment] += resolution_map[answer]
+        dirichlet[contributor][answer][judgment] += (resolution_map[answer] *
+                                                     weight)
         contributor_space.add(contributor)
         answer_space.add(answer)
   # We must ensure that dirichlet has an entry (and a +1 term) for each possible
@@ -257,8 +282,7 @@ def SampleConfusionMatrices(dirichlet):
     for answer in dirichlet[contributor]:
       confusion_matrices[contributor][answer] = dict(zip(
           dirichlet[contributor][answer].iterkeys(),
-          numpy.random.mtrand.dirichlet(
-              dirichlet[contributor][answer].values())))
+          numpy.random.dirichlet(dirichlet[contributor][answer].values())))
   return confusion_matrices
 
 
@@ -270,36 +294,53 @@ def SampleConfusionMatrices(dirichlet):
 class ConfusionMatrices(model.StatisticalModel):
   """Models rater behaviour using one confusion matrix for each contributor."""
 
-  def SetMLEParameters(self, data):
+  def SetMLEParameters(self, data, question_weights=None):
     """Given resolutions and judgments, updates self with their MLEs.
 
     Args:
       data: A ResolverData object.
+      question_weights: Used by decision_tree.py.  An optional dict from
+                        question to a float.  Questions will be weighted
+                        accordingly in computing the priors, with a default
+                        weight of 1.0.
     """
-    self.priors = MLEResolutionPriors(data)
-    self.confusion_matrices = MLEConfusionMatrices(data)
+    self.priors = MLEResolutionPriors(data, question_weights=question_weights)
+    self.confusion_matrices = MLEConfusionMatrices(
+        data, question_weights=question_weights)
 
-  def SetVariationalParameters(self, data):
+  def SetVariationalParameters(self, data, question_weights=None):
     """Given resolutions and judgments, updates self with variational params.
 
     Args:
       data: A ResolverData object.
+      question_weights: Used by decision_tree.py.  An optional dict from
+                        question to a float.  Questions will be weighted
+                        accordingly in computing the priors, with a default
+                        weight of 1.0.
     """
     self.priors = VariationalResolutionPriors(
-        ResolutionPriorsDirichletParameters(data))
+        ResolutionPriorsDirichletParameters(data,
+                                            question_weights=question_weights))
     self.confusion_matrices = VariationalConfusionMatrices(
-        ConfusionMatricesDirichletParameters(data))
+        ConfusionMatricesDirichletParameters(data,
+                                             question_weights=question_weights))
 
-  def SetSampleParameters(self, data):
+  def SetSampleParameters(self, data, question_weights=None):
     """Given resolutions and judgments, updates self with sampled parameters.
 
     Args:
       data: A ResolverData object.
+      question_weights: Used by decision_tree.py.  An optional dict from
+                        question to a float.  Questions will be weighted
+                        accordingly in computing the priors, with a default
+                        weight of 1.0.
     """
     self.priors = SampleResolutionPriors(
-        ResolutionPriorsDirichletParameters(data))
+        ResolutionPriorsDirichletParameters(data,
+                                            question_weights=question_weights))
     self.confusion_matrices = SampleConfusionMatrices(
-        ConfusionMatricesDirichletParameters(data))
+        ConfusionMatricesDirichletParameters(data,
+                                             question_weights=question_weights))
 
   def QuestionEntropy(self, radix=2):
     """Calculates and returns per-question entropy, given self.priors.
@@ -310,9 +351,13 @@ class ConfusionMatrices(model.StatisticalModel):
     Returns:
       Entropy in units of base equal to the parameter radix (bits by default).
     """
-    return sum([-probability * math.log(probability, radix)
-                if probability else 0.0
-                for probability in self.priors.itervalues()])
+    # self.priors is not guaranteed to be normalized, so normalize its values:
+    norm = sum(self.priors.itervalues())
+    normalized_probabilities = [probability / norm
+                                for probability in self.priors.itervalues()]
+    return sum(-probability * math.log(probability, radix)
+               if probability else 0.0
+               for probability in normalized_probabilities)
 
   def PointwiseMutualInformation(self, contributor, answer, judgment,
                                  previous_responses=None, radix=2):

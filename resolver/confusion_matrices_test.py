@@ -246,6 +246,14 @@ class ConfusionMatricesTest(unittest.TestCase):
         DS_MLE_PRIORS,
         confusion_matrices.MLEResolutionPriors(test_util.DS_DATA_FINAL),
         label='answer')
+    # Check that the weighted test data gives the same results as the original:
+    test_util.AssertMapsAlmostEqual(
+        self,
+        DS_MLE_PRIORS,
+        confusion_matrices.MLEResolutionPriors(
+            test_util.DS_DATA_EXTRA,
+            question_weights=test_util.DS_EXTRA_WEIGHTS),
+        label='answer')
 
   def testMLEConfusionMatrices(self):
     # Check that MLEConfusionMatrices returns agnostic matrices when there are
@@ -261,6 +269,10 @@ class ConfusionMatricesTest(unittest.TestCase):
     result = confusion_matrices.MLEConfusionMatrices(
         test_util.DS_DATA_FINAL)
     test_util.AssertConfusionMatricesAlmostEqual(self, DS_MLE_CM, result)
+    # Check that the weighted test data gives the same results as the original:
+    result = confusion_matrices.MLEConfusionMatrices(
+        test_util.DS_DATA_EXTRA, question_weights=test_util.DS_EXTRA_WEIGHTS)
+    test_util.AssertConfusionMatricesAlmostEqual(self, DS_MLE_CM, result)
 
   def testResolutionPriorsDirichletParameters(self):
     # Check the Dirichlet alpha vector for the Ipeirotis data:
@@ -273,6 +285,11 @@ class ConfusionMatricesTest(unittest.TestCase):
         test_util.DS_DATA_FINAL)
     test_util.AssertMapsAlmostEqual(
         self, DS_PRIORS_DIRICHLET, result, label='answer')
+    # Check that the weighted test data gives the same results as the original:
+    result = confusion_matrices.ResolutionPriorsDirichletParameters(
+        test_util.DS_DATA_EXTRA, question_weights=test_util.DS_EXTRA_WEIGHTS)
+    test_util.AssertMapsAlmostEqual(self, DS_PRIORS_DIRICHLET, result,
+                                    label='answer')
 
   def testVariationalResolutionPriors(self):
     # Test with the Ipeirotis data:
@@ -340,6 +357,12 @@ class ConfusionMatricesTest(unittest.TestCase):
     # And for the Dawid & Skene data:
     result = confusion_matrices.ConfusionMatricesDirichletParameters(
         test_util.DS_DATA_FINAL)
+    test_util.AssertConfusionMatricesAlmostEqual(self,
+                                                 DS_CM_DIRICHLET, result,
+                                                 places=2)
+    # Check that the weighted test data gives the same results as the original:
+    result = confusion_matrices.ConfusionMatricesDirichletParameters(
+        test_util.DS_DATA_EXTRA, question_weights=test_util.DS_EXTRA_WEIGHTS)
     test_util.AssertConfusionMatricesAlmostEqual(self,
                                                  DS_CM_DIRICHLET, result,
                                                  places=2)
@@ -516,6 +539,11 @@ class ConfusionMatricesTest(unittest.TestCase):
     # Test in binary:
     self.assertAlmostEqual(0.9709506, cm.QuestionEntropy())
     # And in digits:
+    self.assertAlmostEqual(0.2922853, cm.QuestionEntropy(radix=10))
+    # Ensure that we correctly normalize non-normalized priors (those produced
+    # by VariationalParameters, for example):
+    cm.priors = {k: v * 3.0 for k, v in IPEIROTIS_MLE_PRIORS.iteritems()}
+    self.assertAlmostEqual(0.9709506, cm.QuestionEntropy())
     self.assertAlmostEqual(0.2922853, cm.QuestionEntropy(radix=10))
 
   def testPointwiseMutualInformation(self):

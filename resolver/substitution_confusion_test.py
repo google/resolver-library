@@ -28,9 +28,9 @@ from resolver import test_util
 # Numerically-estimated resolution probabilities for the Ipeirotis exmaple:
 IPEIROTIS_SS_CM_RESOLUTIONS = {'url1': {'notporn': 1.0},  # golden answer
                                'url2': {'porn': 1.0},  # golden answer
-                               'url3': {'notporn': 0.968, 'porn': 0.032},
-                               'url4': {'notporn': 0.040, 'porn': 0.960},
-                               'url5': {'notporn': 0.888, 'porn': 0.112}}
+                               'url3': {'notporn': 0.95, 'porn': 0.05},
+                               'url4': {'notporn': 0.05, 'porn': 0.95},
+                               'url5': {'notporn': 0.9, 'porn': 0.1}}
 
 # Convergence for the Dawid and Skene example is slow because of the small
 # amount of data for categories 3 and 4.  Therefore we'll use only coarse
@@ -89,28 +89,29 @@ class SubstitutionConfusionTest(unittest.TestCase):
   def testIntegrate(self):
     # Seed the random number generator to produce deterministic test results:
     numpy.random.seed(0)
+    # TODO(tpw):  This is necessary but not sufficient.  Python's arbitrary
+    #             ordering of dict iteration makes some deeper calls
+    #             non-deterministic, and thus this test may exhibit flakiness.
 
     # Initialize a confusion matrices model:
     cm = confusion_matrices.ConfusionMatrices()
 
-# TODO(tpw):  Once we have a way to mark input resolutions as 'golden', enable
-#             this test (which requires golden data).
-#   # First check the estimated answers for the Ipeirotis example, using the
-#   # EM algorithm's results as a starting point for the sampling chain:
-#   data = test_util.IPEIROTIS_DATA_FINAL
-#   sampler = substitution_sampling.SubstitutionSampling()
-#   cm.InitializeResolutions(data)
-#   sampler.Integrate(data, cm, number_of_samples=20000)
-#   result = cm.ExtractResolutions(data)
-#   test_util.AssertResolutionsAlmostEqual(self,
-#                                          IPEIROTIS_SS_CM_RESOLUTIONS, result,
-#                                          places=2)
+    # First check the estimated answers for the Ipeirotis example, using the
+    # EM algorithm's results as a starting point for the sampling chain:
+    data = test_util.IPEIROTIS_DATA_FINAL
+    sampler = substitution_sampling.SubstitutionSampling()
+    sampler.Integrate(data, cm, golden_questions=['url1', 'url2'],
+                      number_of_samples=20000)
+    result = cm.ExtractResolutions(data)
+    test_util.AssertResolutionsAlmostEqual(self,
+                                           IPEIROTIS_SS_CM_RESOLUTIONS, result,
+                                           places=1)
 
     # Now check the estimated answers for the Dawid & Skene example, again using
     # the EM algorithm's results as a starting point for the sampling chain:
+    numpy.random.seed(0)
     data = test_util.DS_DATA_FINAL
     sampler = substitution_sampling.SubstitutionSampling()
-    cm.InitializeResolutions(data)
     sampler.Integrate(data, cm, number_of_samples=20000)
     result = cm.ExtractResolutions(data)
     test_util.AssertResolutionsAlmostEqual(self, DS_SS_CM_RESOLUTIONS, result,

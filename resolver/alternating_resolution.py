@@ -41,23 +41,33 @@ class AlternatingResolution(object):
     raise NotImplementedError
 
   @classmethod
-  def IterateOnce(cls, data, model):
+  def IterateOnce(cls, data, model, golden_questions=None):
     """Performs one step of an alternating algorithm.
 
     Args:
       data:   A ResolverData structure.
       model:  A statistical model for the problem.  It must provide
               ResolveQuestion and any methods needed by UpdateModel.
+      golden_questions:  An optional iterable of questions whose resolutions
+                         are to be left unchanged by this method.
 
     Returns:
       The sum-of-resolution-distance-squared between the old and new
       resolution maps.
     """
+    if golden_questions is None:
+      golden_questions = frozenset()
+    else:
+      # Sets are faster to work with than lists:
+      golden_questions = frozenset(golden_questions)
+
     # Set model parameters:
     cls.UpdateModel(data, model)
     # Use the parameters to estimate a resolution for each question:
     resolution_delta = 0.0
-    for responses, resolution_map in data.itervalues():
+    for question, (responses, resolution_map) in data.iteritems():
+      if question in golden_questions:
+        continue
       new_resolution_map = model.ResolveQuestion(responses)
       resolution_delta += model.ResolutionDistanceSquared(resolution_map,
                                                           new_resolution_map)
@@ -67,13 +77,18 @@ class AlternatingResolution(object):
     return resolution_delta
 
   @classmethod
-  def IterateUntilConvergence(cls, data, model, max_iterations=MAX_ITERATIONS):
+  def IterateUntilConvergence(cls, data, model, golden_questions=None,
+                              max_iterations=MAX_ITERATIONS):
     """Calls IterateOnce until convergence or a fixed number of steps.
 
     Args:
       data:            A ResolverData structure.
       model:           A statistical model for the problem.  It must provide
                        ResolveQuestion and any methods needed by UpdateModel.
+      golden_questions:  An optional iterable of questions whose resolutions
+                         are to be left unchanged by this method.  Fixing
+                         resolutions in this manner is how resolver takes into
+                         account gold questions.
       max_iterations:  The maximum number of iterations to perform.
 
     Returns:
@@ -81,7 +96,8 @@ class AlternatingResolution(object):
       max_iterations steps, and False otherwise.
     """
     for _ in range(max_iterations):
-      if cls.IterateOnce(data, model) < EPSILON:
+      if cls.IterateOnce(data, model,
+                         golden_questions=golden_questions) < EPSILON:
         return True
     return False
 

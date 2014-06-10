@@ -23,6 +23,12 @@ from resolver import test_util
 
 
 # Resolutions computed using VB plus the probability-correct model:
+IPEIROTIS_VB_PC_RESOLUTIONS = {'url1': {'notporn': 1.0},
+                               'url2': {'porn': 1.0},
+                               'url3': {'notporn': 1.0},
+                               'url4': {'porn': 0.999, 'notporn': 0.001},
+                               'url5': {'porn': 0.002, 'notporn': 0.998}}
+
 DS_VB_PC_RESOLUTIONS = {1: {1: 1.000},
                         2: {3: 1.000},
                         3: {1: 0.142, 2: 0.858},
@@ -74,8 +80,32 @@ class VbProbabilityCorrectTest(unittest.TestCase):
   longMessage = True
 
   def testIterateUntilConvergence(self):
-    # TODO(tpw):  Once we support marking input resolutions
-    #             as 'golden', test with the Ipeirotis data.
+    # Test first with the Ipeirotis example (expecting a resolution, above,
+    # differing slightly from the expectation-maximization case):
+    data = test_util.IPEIROTIS_DATA
+    pc = probability_correct.ProbabilityCorrect()
+    pc.InitializeResolutions(data)
+    maximizer = alternating_resolution.VariationalBayes()
+    # Run the variational inference algorithm:
+    self.assertTrue(maximizer.IterateUntilConvergence(
+        data, pc, golden_questions=['url1', 'url2']))
+    # Check the results:
+    result = pc.ExtractResolutions(data)
+    test_util.AssertResolutionsAlmostEqual(self,
+                                           IPEIROTIS_VB_PC_RESOLUTIONS, result)
+    self.assertEqual(2, pc._answer_space_size)
+
+    # Run the same experiment without gold data, and check that having gold
+    # data gives us more faith in the contributors who agree with it:
+    gold_contributor_accuracy = pc.probability_correct.copy()
+    self.assertTrue(maximizer.IterateUntilConvergence(data, pc))
+    non_gold_contributor_accuracy = pc.probability_correct.copy()
+    self.assertGreater(gold_contributor_accuracy['worker2'],
+                       non_gold_contributor_accuracy['worker2'])
+    self.assertGreater(gold_contributor_accuracy['worker3'],
+                       non_gold_contributor_accuracy['worker3'])
+    self.assertGreater(gold_contributor_accuracy['worker4'],
+                       non_gold_contributor_accuracy['worker4'])
 
     # Test with the Dawid & Skene example (expecting a resolution, above,
     # differing slightly from the expectation-maximization case):

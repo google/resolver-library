@@ -159,31 +159,24 @@ class ModelTest(unittest.TestCase):
                    for _ in range(10)])
     self.assertEqual(set(['A', 'B', None]), results)
 
-  def testMostLikelyResolution(self):
-    # Check that in the event of a tied resolution, MostLikelyResolution is
-    # capable of returning one or the other answers (breaking ties randomly):
+  def testMostLikelyAnswer(self):
+    # Check that in the event of a tied resolution, MostLikelyAnswer is
+    # capable of returning one or the other answer (breaking ties randomly):
     random.seed(1)
     resolution_map = {'A': 0.4, 'B': 0.2, 'C': 0.4}
-    results = set([model.StatisticalModel.MostLikelyResolution(resolution_map)
-                   for _ in range(2)])
-    self.assertEqual(set(['A', 'C']), results)
-    # Check that with an empty resolution, MostLikelyResolution returns None:
-    self.assertEqual(None, model.StatisticalModel.MostLikelyResolution({}))
+    results = set([
+        model.StatisticalModel.MostLikelyAnswer(resolution_map)
+        for _ in range(2)])
+    self.assertEqual(set([('A', 0.4), ('C', 0.4)]), results)
+    # Check that with an empty resolution, MostLikelyAnswer returns None:
+    self.assertEqual(None, model.StatisticalModel.MostLikelyAnswer({}))
 
-  def testMostLikelyResolutions(self):
-    # Use data from the solution to the Dawid & Skene example:
-    result = model.StatisticalModel.MostLikelyResolutions(
-        test_util.DS_DATA_FINAL)
-    expected = {1: 1, 2: 4, 3: 2, 4: 2, 5: 2,
-                6: 2, 7: 1, 8: 3, 9: 2, 10: 2,
-                11: 4, 12: 3, 13: 1, 14: 2, 15: 1,
-                16: 1, 17: 1, 18: 1, 19: 2, 20: 2,
-                21: 2, 22: 2, 23: 2, 24: 2, 25: 1,
-                26: 1, 27: 2, 28: 1, 29: 1, 30: 1,
-                31: 1, 32: 3, 33: 1, 34: 2, 35: 2,
-                36: 4, 37: 2, 38: 3, 39: 3, 40: 1,
-                41: 1, 42: 1, 43: 2, 44: 1, 45: 2}
-    test_util.AssertMapsAlmostEqual(self, expected, result)
+  def testMostLikelyAnswers(self):
+    data = {1: ([], {'A': 0.6, 'B': 0.4}),
+            2: ([], {'C': 0.1, 'D': 0.9})}
+    result = model.StatisticalModel.MostLikelyAnswers(data)
+    expected = {1: ('A', 0.6), 2: ('D', 0.9)}
+    self.assertEqual(expected, result)
 
   def testResolutionDistanceSquared(self):
     # Test that ResolutionDistanceSquared returns the correct element-wise
@@ -198,6 +191,8 @@ class ModelTest(unittest.TestCase):
     base_model = model.StatisticalModel()
     self.assertRaises(NotImplementedError, base_model.SetMLEParameters, None)
     self.assertRaises(NotImplementedError, base_model.SetSampleParameters, None)
+    self.assertRaises(NotImplementedError,
+                      base_model.SetVariationalParameters, None)
     self.assertRaises(NotImplementedError, base_model.QuestionEntropy, None)
     self.assertRaises(NotImplementedError, base_model.MutualInformation, None)
     self.assertRaises(NotImplementedError,

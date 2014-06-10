@@ -23,6 +23,12 @@ from resolver import test_util
 
 
 # These results were computed numerically:
+IPEIROTIS_VB_CM_RESOLUTIONS = {'url1': {'notporn': 1.0},
+                               'url2': {'porn': 1.0},
+                               'url3': {'porn': 0.002, 'notporn': 0.998},
+                               'url4': {'porn': 0.996, 'notporn': 0.004},
+                               'url5': {'porn': 0.013, 'notporn': 0.987}}
+
 DS_VB_CM_RESOLUTIONS = {1: {1: 1.0},
                         2: {3: 1.0},
                         3: {1: 0.721, 2: 0.279},
@@ -78,15 +84,14 @@ class VariationalBayesConfusionTest(unittest.TestCase):
     cm = confusion_matrices.ConfusionMatrices()
     vb = alternating_resolution.VariationalBayes()
 
-# TODO(tpw):  Once we have a way to mark input resolutions as 'golden', enable
-#             this test (which requires golden data).
-#   # First test with the Ipeirotis example:
-#   data = test_util.IPEIROTIS_DATA
-#   cm.InitializeResolutions(data)
-#   self.assertTrue(vb.IterateUntilConvergence(data, cm))
-#   result = cm.ExtractResolutions(data)
-#   test_util.AssertResolutionsAlmostEqual(self,
-#                                          IPEIROTIS_VB_CM_RESOLUTIONS, result)
+    # First test with the Ipeirotis example:
+    data = test_util.IPEIROTIS_DATA
+    cm.InitializeResolutions(data)
+    self.assertTrue(vb.IterateUntilConvergence(
+        data, cm, golden_questions=['url1', 'url2']))
+    result = cm.ExtractResolutions(data)
+    test_util.AssertResolutionsAlmostEqual(self,
+                                           IPEIROTIS_VB_CM_RESOLUTIONS, result)
 
     # Now test with the Dawid & Skene example:
     data = test_util.DS_DATA

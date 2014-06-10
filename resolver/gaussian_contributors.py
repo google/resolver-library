@@ -57,7 +57,7 @@ INFINITY = numpy.inf
 ####################
 
 
-def GaussianStatistics(data):
+def GaussianStatistics(data, question_weights=None):
   """Given resolutions and judgments, returns MLE contributor parameters.
 
   These statistics, described in RCJ, summarize contributor behavior for the
@@ -70,20 +70,26 @@ def GaussianStatistics(data):
 
   Args:
     data:  A ResolverData structure.
+    question_weights: Used by decision_tree.py.  An optional dict from question
+                      to a float.  Questions will be weighted accordingly in
+                      computing the statistics, with a default weight of 1.0.
 
   Returns:
     3 maps from contributor to judgment count, MLE bias, and sum of squared
     deviations respectively.
   """
+  if question_weights is None:
+    question_weights = {}
 
   # Iterate over data to count judgments:
   judgment_count = collections.defaultdict(float)
   difference = collections.defaultdict(float)
-  for responses, resolution_map in data.itervalues():
+  for question, (responses, resolution_map) in data.iteritems():
+    weight = question_weights.get(question, 1.0)
     mean = resolution_map[MEAN]
     for contributor, judgment, _ in responses:
-      judgment_count[contributor] += 1.0
-      difference[contributor] += judgment - mean
+      judgment_count[contributor] += weight
+      difference[contributor] += (judgment - mean) * weight
 
   # Normalize and multiply by 1 - epsilon to get MLE contributor bias:
   mle_bias = {}  # eta_hat
@@ -94,12 +100,13 @@ def GaussianStatistics(data):
   # Iterate over data again to compute the sum of squares of deviations (the
   # numerator in the contributor's MLE precision):
   sum_squared_deviation = collections.defaultdict(float)
-  for responses, resolution_map in data.itervalues():
+  for question, (responses, resolution_map) in data.iteritems():
+    weight = question_weights.get(question, 1.0)
     mean = resolution_map[MEAN]
     variance = resolution_map[VARIANCE]
     for contributor, judgment, _ in responses:
       delta = judgment - mean - mle_bias[contributor]
-      sum_squared_deviation[contributor] += variance + delta * delta
+      sum_squared_deviation[contributor] += (variance + delta * delta) * weight
 
   return judgment_count, mle_bias, sum_squared_deviation
 
@@ -222,31 +229,44 @@ class GaussianContributors(model.StatisticalModel):
         resolution_map[MEAN] = numpy.mean(numeric_judgments)
         resolution_map[VARIANCE] = numpy.var(numeric_judgments)
 
-  def SetMLEParameters(self, data):
+  def SetMLEParameters(self, data, question_weights=None):
     """Given resolutions and judgments, updates self with parameter MLEs.
 
     Args:
       data:  A ResolverData object with Gaussian resolutions.
+      question_weights: Used by decision_tree.py.  An optional dict from
+                        question to a float.  Questions will be weighted
+                        accordingly in computing the statistics, with a
+                        default weight of 1.0.
     """
-    self.bias, self.precision = MLEGaussianParameters(GaussianStatistics(data))
+    self.bias, self.precision = MLEGaussianParameters(
+        GaussianStatistics(data, question_weights=question_weights))
 
-  def SetSampleParameters(self, data):
+  def SetSampleParameters(self, data, question_weights=None):
     """Given resolutions and judgments, updates self with sampled parameters.
 
     Args:
       data:  A ResolverData object with Gaussian resolutions.
+      question_weights: Used by decision_tree.py.  An optional dict from
+                        question to a float.  Questions will be weighted
+                        accordingly in computing the statistics, with a
+                        default weight of 1.0.
     """
     self.bias, self.precision = SampleGaussianParameters(
-        GaussianStatistics(data))
+        GaussianStatistics(data, question_weights=question_weights))
 
-  def SetVariationalParameters(self, data):
+  def SetVariationalParameters(self, data, question_weights=None):
     """Given resolutions and judgments, updates self with variational eta/sigma.
 
     Args:
       data:  A ResolverData object with Gaussian resolutions.
+      question_weights: Used by decision_tree.py.  An optional dict from
+                        question to a float.  Questions will be weighted
+                        accordingly in computing the statistics, with a
+                        default weight of 1.0.
     """
     self.bias, self.precision = VariationalGaussianParameters(
-        GaussianStatistics(data))
+        GaussianStatistics(data, question_weights=question_weights))
 
   def ResolveQuestion(self, responses):
     """Returns one resolution map based on judgments and current parameters.

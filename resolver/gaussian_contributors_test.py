@@ -72,6 +72,28 @@ class GaussianContributorsTest(unittest.TestCase):
     test_util.AssertMapsAlmostEqual(
         self, TEST_SUM_SQUARED_DEVIATION, result_sum_squared_deviation,
         label='sum of squared deviations, contributor')
+
+    # Next, check that question weights are correctly interpreted:
+    weighted_data = copy.deepcopy(TEST_DATA)
+    # Duplicate question 4:
+    weighted_data['q5'] = weighted_data['q4']
+    # Check we get the same statistics when we use the modified data with
+    # weights on q4 and q5 summing to 1.0:
+    result_judgment_count, result_mle_bias, result_sum_squared_deviation = (
+        gaussian_contributors.GaussianStatistics(
+            weighted_data, question_weights={'q4': 0.75, 'q5': 0.25}))
+    test_util.AssertMapsAlmostEqual(self,
+                                    TEST_JUDGMENT_COUNT,
+                                    result_judgment_count,
+                                    label='judgment count, contributor')
+    test_util.AssertMapsAlmostEqual(self,
+                                    TEST_MLE_BIAS,
+                                    result_mle_bias,
+                                    label='MLE bias, contributor')
+    test_util.AssertMapsAlmostEqual(
+        self, TEST_SUM_SQUARED_DEVIATION, result_sum_squared_deviation,
+        label='sum of squared deviations, contributor')
+
     # Check that data without resolutions (or with the
     # wrong resolution format) cause a KeyError:
     self.assertRaises(KeyError, gaussian_contributors.GaussianStatistics,

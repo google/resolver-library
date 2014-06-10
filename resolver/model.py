@@ -122,8 +122,50 @@ class StatisticalModel(object):
     return None
 
   @staticmethod
+  def MostLikelyAnswer(resolution_map):
+    """Returns the most likely answer from a resolution map.
+
+    Args:
+      resolution_map:  A map from answers to probabilities.
+
+    Returns:
+      A tuple of (the most likely answer, the confidence in that answer).
+
+    Example:
+      r = {0: 0.4, 1: 0.5, 2: 0.1}
+      MostLikelyAnswer(r) == (1, 0.5)
+    """
+    if resolution_map:
+      # Sort (for deterministic tests) and then shuffle, to break ties randomly:
+      resolution_items = sorted(resolution_map.items())
+      random.shuffle(resolution_items)
+      return max(resolution_items, key=lambda x: x[1])
+    return None
+
+  @staticmethod
+  def MostLikelyAnswers(data):
+    """Returns the most likely answer for each question.
+
+    Args:
+      data: A ResolverData object.
+
+    Returns:
+      A dict mapping from question to a tuple (most likely answer, confidence).
+
+    Example:
+      t = {"Question 1": {0: 0.3, 1: 0.4, "foo": 0.3},
+           "Question 2": {0: 0.9, 1: 0.1},
+           "Question 3": {"wingnut": 0.8, "radguy": 0.2}}
+      MostLikelyAnswers(t) == {"Question 1": (1, 0.4),
+                               "Question 2": (0, 0.9),
+                               "Question 3": ("wingnut", 0.8)]
+    """
+    return {question: StatisticalModel.MostLikelyAnswer(resolution_map)
+            for question, (_, resolution_map) in data.iteritems()}
+
+  @staticmethod
   def MostLikelyResolution(resolution_map):
-    """Returns the most probable answer from a resolution map.
+    """DEPRECATED!  Returns the most probable answer from a resolution map.
 
     Args:
       resolution_map:  A map from answers to probabilities.
@@ -135,6 +177,7 @@ class StatisticalModel(object):
       r = {0: 0.4, 1: 0.5, 2: 0.1}
       MostLikelyResolution(r) == 1
     """
+    print 'MostLikelyResolution is deprecated.  Use MostLikelyAnswer instead.'
     if resolution_map:
       # Sort (for deterministic tests) and then shuffle, to break ties randomly:
       resolution_items = sorted(resolution_map.items())
@@ -144,7 +187,7 @@ class StatisticalModel(object):
 
   @staticmethod
   def MostLikelyResolutions(data):
-    """Returns the most probable answer for each question.
+    """DEPRECATED!  Returns the most probable answer for each question.
 
     Args:
       data: A ResolverData object.
@@ -160,6 +203,7 @@ class StatisticalModel(object):
                                    "Question 2": 0,
                                    "Question 3": "wingnut"]
     """
+    print 'MostLikelyResolutions is deprecated.  Use MostLikelyAnswers instead.'
     return dict([(question,
                   StatisticalModel.MostLikelyResolution(resolution_map))
                  for question, (_, resolution_map) in data.iteritems()])
@@ -181,10 +225,13 @@ class StatisticalModel(object):
     return sum([(x.get(key, 0.0) - y.get(key, 0.0)) ** 2
                 for key in set(x.keys() + y.keys())])
 
-  def SetMLEParameters(self, data):
+  def SetMLEParameters(self, data, question_weights=None):
     raise NotImplementedError
 
-  def SetSampleParameters(self, data):
+  def SetSampleParameters(self, data, question_weights=None):
+    raise NotImplementedError
+
+  def SetVariationalParameters(self, data, question_weights=None):
     raise NotImplementedError
 
   def QuestionEntropy(self, data):

@@ -48,6 +48,26 @@ Statistical models provided in this package:
     For example, a resolution of
       {'mean': 5.76, 'variance': 0.7}
     represents a distribution centered around 5.76 with a variance of 0.7.
+  decision_tree.py
+    The DecisionTree model assumes that judgments represent paths through a
+    decision tree.  These paths, and thus all judgments and answers in this
+    model, are tuples, for example:
+      ('canis', 'lupus', 'familiaris')
+    Resolutions returned by this model include subpaths and thus are not
+    expected to sum to 1.0.  For example, a resolution that is 90% confident in
+    C. l. familiaris, 5% confident in C. l. dingo, and 5% confident in C. dirus
+    would be returned as:
+      {('canis',): 1.0,
+       ('canis', 'dirus'): 0.05,
+       ('canis', 'lupus'): 0.95,
+       ('canis', 'lupus', 'familiaris'): 0.9,
+       ('canis', 'lupus', 'dingo'): 0.05}
+    The model works by instantiating a separate ConfusionMatrix model for each
+    non-terminal path in the judgment set.  The example above would have one
+    confusion matrix model for ('canis',) subclasses and one for ('canis',
+    'lupus') subclasses.
+    DecisionTree can easily be subclassed by overriding its CreateSubmodel()
+    method, to allow specific submodels to be used for certain paths.
 
 Inference methods provided in this package:
   alternating_resolution.py

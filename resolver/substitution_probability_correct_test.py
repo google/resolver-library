@@ -27,9 +27,9 @@ from resolver import test_util
 # Numerically-estimated resolution probabilities for the Ipeirotis exmaple:
 IPEIROTIS_SS_PC_RESOLUTIONS = {'url1': {'notporn': 1.0},  # golden answer
                                'url2': {'porn': 1.0},  # golden answer
-                               'url3': {'notporn': 0.993, 'porn': 0.007},
-                               'url4': {'notporn': 0.010, 'porn': 0.990},
-                               'url5': {'notporn': 0.957, 'porn': 0.043}}
+                               'url3': {'notporn': 0.99, 'porn': 0.01},
+                               'url4': {'notporn': 0.01, 'porn': 0.99},
+                               'url5': {'notporn': 0.95, 'porn': 0.05}}
 
 # Estimated resolutions using substitution sampling with the
 # probability-correct model:
@@ -87,30 +87,30 @@ class SubstitutionProbabilityCorrectTest(unittest.TestCase):
   def testIntegrate(self):
     # Seed the random number generator to produce deterministic test results:
     numpy.random.seed(0)
+    # TODO(tpw):  This is necessary but not sufficient.  Python's arbitrary
+    #             ordering of dict iteration makes some deeper calls
+    #             non-deterministic, and thus this test may exhibit flakiness.
 
     # Initialize a probability-correct model:
     pc = probability_correct.ProbabilityCorrect()
 
-# TODO(tpw):  Once we have a way to mark input resolutions as 'golden', enable
-#             this test (which requires golden data).
-#   # First check the estimated answers for the Ipeirotis example, using the
-#   # EM algorithm's results as a starting point for the sampling chain:
-#   data = test_util.IPEIROTIS_DATA_FINAL
-#   sampler = substitution_sampling.SubstitutionSampling()
-#   pc.InitializeResolutions(data)
-#   sampler.Integrate(data, pc, number_of_samples=20000)
-#   result = pc.ExtractResolutions(data)
-#   test_util.AssertResolutionsAlmostEqual(self,
-#                                          IPEIROTIS_SS_PC_RESOLUTIONS, result,
-#                                          places=2)
-#   # Reset the model:
-#   pc.UnsetAnswerSpaceSize()
+    # First check the estimated answers for the Ipeirotis example, using the
+    # EM algorithm's results as a starting point for the sampling chain:
+    data = test_util.IPEIROTIS_DATA_FINAL
+    sampler = substitution_sampling.SubstitutionSampling()
+    sampler.Integrate(data, pc, golden_questions=['url1', 'url2'],
+                      number_of_samples=20000)
+    result = pc.ExtractResolutions(data)
+    test_util.AssertResolutionsAlmostEqual(self,
+                                           IPEIROTIS_SS_PC_RESOLUTIONS, result,
+                                           places=1)
+    # Reset the model:
+    pc.UnsetAnswerSpaceSize()
 
     # Now check the estimated answers for the Dawid & Skene example, again using
     # the EM algorithm's results as a starting point for the sampling chain:
     data = test_util.DS_DATA_FINAL
     sampler = substitution_sampling.SubstitutionSampling()
-    pc.InitializeResolutions(data)
     sampler.Integrate(data, pc, number_of_samples=20000)
     result = pc.ExtractResolutions(data)
     test_util.AssertResolutionsAlmostEqual(self, DS_SS_PC_RESOLUTIONS, result,
